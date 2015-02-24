@@ -1,4 +1,10 @@
-#!/usr/pkg/bin/python2.6 -O
+#!/usr/bin/python -O
+#
+# nntp2nntp - base script "nntp2nntp_v3"
+# mod by oVPN.to 
+# + deny POSTing!
+# + dynamic USER file
+# Built: v3-0.0.9
 
 import sys, os, time
 from hashlib import sha256
@@ -34,8 +40,10 @@ ca verification = true
 ca file = myca.pem
 logfile = /var/log/nntp2nntp.log
 pidfile = /var/run/nntp2nntp.pid
-
-[users]
+userfile = users.conf
+""")
+  sys.stdout.write("\nExample of user file:\n\n")
+  sys.stdout.write("""[users]
 user1    = 1b4f0e9851971998e732078544c96b36c3d01cedf7caa332359d6f1d83567014
 user2    = 60303ae22b998861bce3b28f33eec1be758a213c86c93c076dbe9f558c11c752
 
@@ -71,11 +79,16 @@ if PROXY_CA_VERIFY:
 PROXY_PORT = config.has_option('proxy', 'port') and config.getint('proxy', 'port') or 1563
 PROXY_LOGFILE = config.has_option('proxy', 'logfile') and config.get('proxy', 'logfile').strip() or '/var/log/nntp2nntp.log'
 PROXY_PIDFILE = config.has_option('proxy', 'pidfile') and config.get('proxy', 'pidfile').strip() or '/var/run/nntp2nntp.pid'
+USER_FILE = config.has_option('proxy', 'userfile') and config.get('proxy', 'userfile').strip()
 
-LOCAL_USERS = dict(config.items('users'))
-if config.has_section('connections'):
-  USER_CONNECTIONS = dict([(x, int(y)) for x,y in config.items('connections')])
+usercfg = SafeConfigParser()
+usercfg.read(USER_FILE)
+
+LOCAL_USERS = dict(usercfg.items('users'))
+if usercfg.has_section('connections'):
+  USER_CONNECTIONS = dict([(x, int(y)) for x,y in usercfg.items('connections')])
 else: USER_CONNECTIONS = {}
+
 
 current_total_connections = 0
 current_connections = {}
@@ -155,6 +168,34 @@ class NNTPProxyServer(LineReceiver):
         self.sendLine('482 Invalid Password')
         self.transport.loseConnection()
       self.lineReceived = self._lineReceivedNormal
+    elif line.upper().startswith('MODE READER'):
+		self.sendLine('502 Reading service permanently unavailable')
+		log.msg("%s failed MODE READER" % (repr(self.auth_user)))
+		self.transport.loseConnection()
+#   elif line.upper().startswith('HEAD'):
+#		self.sendLine('430 no article with that message-id')
+#		log.msg("%s failed HEAD" % (repr(self.auth_user)))
+#		self.transport.loseConnection()
+    elif line.upper().startswith('POST'):
+		self.sendLine('440 Posting not permitted')
+		log.msg("%s failed POST" % (repr(self.auth_user)))
+		self.transport.loseConnection()
+    elif line.upper().startswith('IHAVE'):
+		self.sendLine('435 Article not wanted')
+		log.msg("%s failed IHAVE" % (repr(self.auth_user)))
+		self.transport.loseConnection()
+#    elif line.upper().startswith('BODY'):
+#		self.sendLine('430 no article with that message-id')
+#		log.msg("%s failed BODY" % (repr(self.auth_user)))
+#		self.transport.loseConnection()
+    elif line.upper().startswith('QUIT'):
+		self.sendLine('205 Connection closing')
+		log.msg("%s sent QUIT" % (repr(self.auth_user)))
+		self.transport.loseConnection()
+    elif line == '':
+		self.sendLine('502 ERROR YOU SENT NOTHING')
+		log.msg("%s sent NULL" % (repr(self.auth_user)))
+		self.transport.loseConnection()
     else: self._lineReceivedNormal(line)
 
 class NNTPProxyClient(LineReceiver):
@@ -170,8 +211,23 @@ class NNTPProxyClient(LineReceiver):
 	self.server = None
 
   def lineReceived(self, line):
-    self.server.downloaded_bytes += len(line)
-    self.server.sendLine(line)
+    if (line.startswith('200') or line.startswith('201')):
+      self.server.sendLine('201 oVPN.to NNTP-Proxy Ready, posting not allowed')
+    elif line.startswith('281'):
+      self.server.sendLine('281 Authentication accepted')
+    elif line.startswith('340'):
+      self.server.sendLine('440 posting not permitted')
+      #log.msg("Server got 340 send article to be posted. sent 440 posting not permitted to client.")
+      self.server.transport.loseConnection()
+      self.transport.loseConnection()
+    elif line.startswith('502'):
+      self.server.sendLine('502 Error')
+      #log.msg("Server got 502 Error: %s" % line)
+      self.server.transport.loseConnection()
+      self.transport.loseConnection()
+    else:
+      self.server.downloaded_bytes += len(line)
+      self.server.sendLine(line)
 
 class NNTPProxyClientFactory(ClientFactory):
   server = None

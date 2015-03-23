@@ -211,23 +211,10 @@ class NNTPProxyClient(LineReceiver):
 	self.server = None
 
   def lineReceived(self, line):
-    if (line.startswith('200') or line.startswith('201')):
-      self.server.sendLine('201 oVPN.to NNTP-Proxy Ready, posting not allowed')
-    elif line.startswith('281'):
-      self.server.sendLine('281 Authentication accepted')
-    elif line.startswith('340'):
-      self.server.sendLine('440 posting not permitted')
-      #log.msg("Server got 340 send article to be posted. sent 440 posting not permitted to client.")
-      self.server.transport.loseConnection()
-      self.transport.loseConnection()
-    elif line.startswith('502'):
-      self.server.sendLine('502 Error')
-      #log.msg("Server got 502 Error: %s" % line)
-      self.server.transport.loseConnection()
-      self.transport.loseConnection()
-    else:
-      self.server.downloaded_bytes += len(line)
-      self.server.sendLine(line)
+    self.server.downloaded_bytes += len(line)
+    self.server.sendLine(line)
+
+
 
 class NNTPProxyClientFactory(ClientFactory):
   server = None

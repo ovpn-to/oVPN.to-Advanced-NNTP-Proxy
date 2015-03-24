@@ -4,7 +4,7 @@
 # mod by oVPN.to 
 # + deny POSTing!
 # + dynamic USER file
-# Built: v3-0.0.9
+# Built: v3-0.1.0
 
 import sys, os, time
 from hashlib import sha256

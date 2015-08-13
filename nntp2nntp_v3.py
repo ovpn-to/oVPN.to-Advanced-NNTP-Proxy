@@ -4,7 +4,7 @@
 # mod by oVPN.to
 # + deny POSTing!
 # + dynamic USER file
-# Built: v3-0.1.1
+# Built: v3-0.1.2
 
 import sys, os, time
 from hashlib import sha256
@@ -144,7 +144,7 @@ class NNTPProxyServer(LineReceiver):
       current_connections[self.auth_user] = max(0, current_connections[self.auth_user] - 1)
     current_total_connections = max(0, current_total_connections - 1)
     duration = int(time.time() - self.conn_time)
-    if duration > 0 or self.uploaded_bytes > 0 or self.downloaded_bytes > 32:
+    if duration > 1 or self.uploaded_bytes >= 32 or self.downloaded_bytes >= 32:
       log.msg('user %s disconnected: duration %d, downloaded %d, uploaded %d' % (repr(self.auth_user),duration,self.downloaded_bytes,self.uploaded_bytes))
 
   def _lineReceivedNormal(self, line):

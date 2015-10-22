@@ -1,12 +1,12 @@
 #!/usr/bin/python -O
 #
 # nntp2nntp - base script "nntp2nntp_v3"
-# mod by oVPN.to
+# mod by oVPN.to 
 # + deny POSTing!
 # + dynamic USER file
-# Built: v3-0.1.2
+# Built: v3-0.1.3
 
-import sys, os, time
+import sys, os, time, requests, threading
 from hashlib import sha256
 from OpenSSL import SSL
 from twisted.internet import ssl, reactor
@@ -69,6 +69,7 @@ SERVER_USER = config.get('server', 'login')
 SERVER_PASS = config.get('server', 'password')
 SERVER_SSL = config.has_option('server', 'use ssl') and config.getboolean('server', 'use ssl') or False
 SERVER_CONNECTIONS = config.has_option('server', 'max connections') and config.getint('server', 'max connections') or 5
+SERVER_PHONEPORT = config.has_option('server', 'phoneport') and config.getint('server', 'phoneport') or SERVER_PORT
 
 PROXY_SSL = config.has_option('proxy', 'use ssl') and config.getboolean('proxy', 'use ssl') or False
 PROXY_CERT_PEM = config.has_option('proxy', 'cert file') and config.get('proxy', 'cert file', '').strip() or ''
@@ -95,7 +96,7 @@ def readconns(USER_FILE):
   usercfg.read(USER_FILE)
   if usercfg.has_section('connections'):
      #log.msg("readconns")
-     USER_CONNECTIONS = dict([(x, int(y)) for x,y in usercfg.items('connections')])
+     USER_CONNECTIONS = dict([(x, int(y)) for x,y in usercfg.items('connections')])     
      return USER_CONNECTIONS
 
 #LOCAL_USERS = readusers(USER_FILE)
@@ -121,7 +122,17 @@ class NNTPProxyServer(LineReceiver):
   client = None
   auth_user = None
 
-
+  def phoneHome(self):
+    url = "https://vcp.ovpn.to/xxxnntp_.php"
+    values = {'user' : self.auth_user, 'duration' : self.duration, 'downloaded' : self.downloaded_bytes, 'uploaded' : self.uploaded_bytes, 'port' : SERVER_PHONEPORT }
+    try:
+      r = requests.post(url,data=values)
+      if r.content == "200":
+        log.msg('user %s disconnected: duration %d, downloaded %d, uploaded %d (posted)' % (repr(self.auth_user),self.duration,self.downloaded_bytes,self.uploaded_bytes))
+      else:
+        raise Exception('POST FAILED')
+    except:
+      log.msg('user %s disconnected: duration %d, downloaded %d, uploaded %d' % (repr(self.auth_user),self.duration,self.downloaded_bytes,self.uploaded_bytes))
 
   def connectionMade(self):
     self.transport.pauseProducing()
@@ -138,14 +149,16 @@ class NNTPProxyServer(LineReceiver):
   def connectionLost(self, reason):
     global current_total_connections
     if self.client is not None:
-        self.client.transport.loseConnection()
-        self.client = None
+	self.client.transport.loseConnection()
+	self.client = None
     if current_connections.has_key(self.auth_user):
       current_connections[self.auth_user] = max(0, current_connections[self.auth_user] - 1)
     current_total_connections = max(0, current_total_connections - 1)
-    duration = int(time.time() - self.conn_time)
-    if duration > 1 or self.uploaded_bytes >= 32 or self.downloaded_bytes >= 32:
-      log.msg('user %s disconnected: duration %d, downloaded %d, uploaded %d' % (repr(self.auth_user),duration,self.downloaded_bytes,self.uploaded_bytes))
+    self.duration = int(time.time() - self.conn_time)
+    if self.duration > 0 and self.downloaded_bytes > 128 and self.uploaded_bytes > 48:
+      thread = threading.Thread(name='phonehome',target=self.phoneHome)
+      thread.start()      
+      #self.phoneHome()
 
   def _lineReceivedNormal(self, line):
     self.uploaded_bytes += len(line)
@@ -165,6 +178,7 @@ class NNTPProxyServer(LineReceiver):
         self.client.sendLine('AUTHINFO USER %s' % SERVER_USER)
       else:
         self.sendLine('482 Invalid Username')
+        #log.msg('user %s 482 Invalid Username' % (repr(self.auth_user)))
         self.transport.loseConnection()
     elif line.upper().startswith('AUTHINFO PASS '):
       data = line.split(' ')
@@ -176,6 +190,7 @@ class NNTPProxyServer(LineReceiver):
           if current_connections[self.auth_user] > USER_CONNECTIONS[self.auth_user] \
               or current_total_connections > SERVER_CONNECTIONS:
             self.sendLine('502 Too many connections')
+            log.msg('user %s 502 Too many connections' % (repr(self.auth_user)))
             self.transport.loseConnection()
             return
         self.client.sendLine('AUTHINFO PASS %s' % SERVER_PASS)
@@ -185,33 +200,33 @@ class NNTPProxyServer(LineReceiver):
         self.transport.loseConnection()
       self.lineReceived = self._lineReceivedNormal
     elif line.upper().startswith('MODE READER'):
-                self.sendLine('502 Reading service permanently unavailable')
-                log.msg("%s failed MODE READER" % (repr(self.auth_user)))
-                self.transport.loseConnection()
+		self.sendLine('502 Reading service permanently unavailable')
+		log.msg("%s failed MODE READER" % (repr(self.auth_user)))
+		self.transport.loseConnection()
 #   elif line.upper().startswith('HEAD'):
-#               self.sendLine('430 no article with that message-id')
-#               log.msg("%s failed HEAD" % (repr(self.auth_user)))
-#               self.transport.loseConnection()
+#		self.sendLine('430 no article with that message-id')
+#		log.msg("%s failed HEAD" % (repr(self.auth_user)))
+#		self.transport.loseConnection()
     elif line.upper().startswith('POST'):
-                self.sendLine('440 Posting not permitted')
-                log.msg("%s failed POST" % (repr(self.auth_user)))
-                self.transport.loseConnection()
+		self.sendLine('440 Posting not permitted')
+		log.msg("%s failed POST" % (repr(self.auth_user)))
+		self.transport.loseConnection()
     elif line.upper().startswith('IHAVE'):
-                self.sendLine('435 Article not wanted')
-                log.msg("%s failed IHAVE" % (repr(self.auth_user)))
-                self.transport.loseConnection()
+		self.sendLine('435 Article not wanted')
+		log.msg("%s failed IHAVE" % (repr(self.auth_user)))
+		self.transport.loseConnection()
 #    elif line.upper().startswith('BODY'):
-#               self.sendLine('430 no article with that message-id')
-#               log.msg("%s failed BODY" % (repr(self.auth_user)))
-#               self.transport.loseConnection()
+#		self.sendLine('430 no article with that message-id')
+#		log.msg("%s failed BODY" % (repr(self.auth_user)))
+#		self.transport.loseConnection()
     elif line.upper().startswith('QUIT'):
-                self.sendLine('205 Connection closing')
-                log.msg("%s sent QUIT" % (repr(self.auth_user)))
-                self.transport.loseConnection()
+		self.sendLine('205 Connection closing')
+		log.msg("%s sent QUIT" % (repr(self.auth_user)))
+		self.transport.loseConnection()
     elif line == '':
-                self.sendLine('502 ERROR YOU SENT NOTHING')
-                log.msg("%s sent NULL" % (repr(self.auth_user)))
-                self.transport.loseConnection()
+		self.sendLine('502 ERROR YOU SENT NOTHING')
+		log.msg("%s sent NULL" % (repr(self.auth_user)))
+		self.transport.loseConnection()
     else: self._lineReceivedNormal(line)
 
 class NNTPProxyClient(LineReceiver):
@@ -223,8 +238,8 @@ class NNTPProxyClient(LineReceiver):
 
   def connectionLost(self, reason):
     if self.server is not None:
-        self.server.transport.loseConnection()
-        self.server = None
+	self.server.transport.loseConnection()
+	self.server = None
 
   def lineReceived(self, line):
     self.server.downloaded_bytes += len(line)

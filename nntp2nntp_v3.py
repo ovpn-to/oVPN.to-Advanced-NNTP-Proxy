@@ -4,7 +4,7 @@
 # mod by oVPN.to 
 # + deny POSTing!
 # + dynamic USER file
-# Built: v3-0.1.3
+# Built: v3-0.1.4
 
 import sys, os, time, requests, threading
 from hashlib import sha256
@@ -198,11 +198,13 @@ class NNTPProxyServer(LineReceiver):
       else:
         self.sendLine('482 Invalid Password')
         self.transport.loseConnection()
+        return
       self.lineReceived = self._lineReceivedNormal
     elif line.upper().startswith('MODE READER'):
 		self.sendLine('502 Reading service permanently unavailable')
 		log.msg("%s failed MODE READER" % (repr(self.auth_user)))
 		self.transport.loseConnection()
+		return
 #   elif line.upper().startswith('HEAD'):
 #		self.sendLine('430 no article with that message-id')
 #		log.msg("%s failed HEAD" % (repr(self.auth_user)))
@@ -211,10 +213,12 @@ class NNTPProxyServer(LineReceiver):
 		self.sendLine('440 Posting not permitted')
 		log.msg("%s failed POST" % (repr(self.auth_user)))
 		self.transport.loseConnection()
+                return
     elif line.upper().startswith('IHAVE'):
 		self.sendLine('435 Article not wanted')
 		log.msg("%s failed IHAVE" % (repr(self.auth_user)))
 		self.transport.loseConnection()
+                return
 #    elif line.upper().startswith('BODY'):
 #		self.sendLine('430 no article with that message-id')
 #		log.msg("%s failed BODY" % (repr(self.auth_user)))
@@ -223,10 +227,12 @@ class NNTPProxyServer(LineReceiver):
 		self.sendLine('205 Connection closing')
 		log.msg("%s sent QUIT" % (repr(self.auth_user)))
 		self.transport.loseConnection()
+                return
     elif line == '':
 		self.sendLine('502 ERROR YOU SENT NOTHING')
 		log.msg("%s sent NULL" % (repr(self.auth_user)))
 		self.transport.loseConnection()
+                return
     else: self._lineReceivedNormal(line)
 
 class NNTPProxyClient(LineReceiver):

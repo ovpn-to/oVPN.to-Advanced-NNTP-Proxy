@@ -4,7 +4,7 @@
 # mod by oVPN.to 
 # + deny POSTing!
 # + dynamic USER file
-# Built: v3-0.1.4
+# Built: v3-0.1.5
 
 import sys, os, time, requests, threading
 from hashlib import sha256
@@ -155,10 +155,9 @@ class NNTPProxyServer(LineReceiver):
       current_connections[self.auth_user] = max(0, current_connections[self.auth_user] - 1)
     current_total_connections = max(0, current_total_connections - 1)
     self.duration = int(time.time() - self.conn_time)
-    if self.duration > 0 and self.downloaded_bytes > 128 and self.uploaded_bytes > 48:
+    if self.duration >= 0 and self.downloaded_bytes > 22 and self.uploaded_bytes > 0:
       thread = threading.Thread(name='phonehome',target=self.phoneHome)
       thread.start()      
-      #self.phoneHome()
 
   def _lineReceivedNormal(self, line):
     self.uploaded_bytes += len(line)
@@ -180,6 +179,7 @@ class NNTPProxyServer(LineReceiver):
         self.sendLine('482 Invalid Username')
         #log.msg('user %s 482 Invalid Username' % (repr(self.auth_user)))
         self.transport.loseConnection()
+        return
     elif line.upper().startswith('AUTHINFO PASS '):
       data = line.split(' ')
       if len(data) == 3 and LOCAL_USERS.get(self.auth_user) == sha256(data[2].strip()).hexdigest():
@@ -249,7 +249,14 @@ class NNTPProxyClient(LineReceiver):
 
   def lineReceived(self, line):
     self.server.downloaded_bytes += len(line)
-    self.server.sendLine(line)
+    if line.startswith('502'):
+       log.msg('DL: %s' % (line))
+       line = "502 NNTP Gateway unavailable."
+       self.server.sendLine(line)
+       self.server.transport.loseConnection()
+       self.transport.loseConnection()
+    else:
+       self.server.sendLine(line)
 
 
 

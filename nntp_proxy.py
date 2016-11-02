@@ -1,6 +1,6 @@
 #!/usr/bin/python2 -O
 #
-#	oVPN.to Advanced NNTP Proxy - Version: 1.0 (PUBLIC) 
+#	oVPN.to Advanced NNTP Proxy - Version: 0.1 (PUBLIC) 
 #
 #	Thanks to:
 #		ddeus@sourceforge for basic ideas
@@ -688,7 +688,7 @@ if CONFIG["BACKEND"]["logs"] == True:
 		try:
 			os.remove(LOGFILE)
 		except:
-			print("logfile remove failed: %s")
+			print("logfile remove failed: %s"%(LOGFILE))
 			sys.exit(1)
 	log.startLogging(file(LOGFILE, 'a'))
 

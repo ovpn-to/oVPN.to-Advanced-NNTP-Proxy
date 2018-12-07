@@ -1,6 +1,6 @@
 #!/usr/bin/python2 -O
 #
-#   oVPN.to Advanced NNTP Proxy - Version: 0.4.26 (PUBLIC)
+#   oVPN.to Advanced NNTP Proxy - Version: 0.4.27 (PUBLIC)
 #
 #   Thanks to people for ideas:
 #       + ddeus@sourceforge (NNTP2NNTP)
@@ -2479,6 +2479,13 @@ class Backend(NNTPClient):
         
         self.server.accept_request = True
         self.server.wait_response_rounds = 0
+        
+        #fuckhere
+        dbg(5,"(%s) def getArticleFailed: sent quit" %(self.server.conn_id))
+        #self.transport.loseConnection()
+        self.sendLine("quit")
+        dbg(5,"(%s) def getArticleFailed: set CLIENT_FACTS[Beid] = None" %(self.server.conn_id))
+        CLIENT_FACTS[self.server.conn_id][self.server.BEid]['prot'] = None
         return
     
     def _stateArticle(self, line):
@@ -2767,6 +2774,7 @@ except Exception as e:
 print("sys.platform = '%s'"%sys.platform)
 
 try:
+    """
     if sys.platform == "linux2":
         try:
             # fixme: experimental import of epollreactor
@@ -2777,6 +2785,7 @@ try:
             #    dbg(1,"epollreactor.install() failed, exception = '%s'"%e)
         except Exception as e:
             dbg(1,"import epollreactor failed, exception = '%s'"%e)
+    """
     from twisted.internet import reactor
     
     FrontendFactory = ServerFactory()

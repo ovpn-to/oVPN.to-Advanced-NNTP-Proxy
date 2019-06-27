@@ -39,5 +39,10 @@
     ~: ADMIN AUTH myPASSWORD PRINT
 ```
 ## ????
-you should search for '# hack to select provider on first connect' and set tback
-to be continued...
+- you should search for '# hack to select provider on first connect' and set tback value to any internal provider id
+- sback and tback define internal backend ids (not mysql dbids! see with telnet: ADMIN AUTH myPASSWORD INFO)
+- on-connect select randomly between sback:tback as primary backend providers
+- use mysql db, backend priority as latter, prio 0 (or lowest value of enabled backends) will arrive at internal id 0
+
+https://github.com/ovpn-to/oVPN.to-Advanced-NNTP-Proxy/blob/1b1c25e934731a3afa3223e5e954e92bc0a1f456/nntp_proxy.py#L1779
+-to be continued...
